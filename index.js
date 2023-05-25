@@ -3,6 +3,7 @@ var winningWord = '';
 var currentRow = 1;
 var guess = '';
 var gamesPlayed = [];
+let words;
 
 // Query Selectors
 var inputs = document.querySelectorAll('input');
@@ -16,13 +17,25 @@ var gameBoard = document.querySelector('#game-section');
 var letterKey = document.querySelector('#key-section');
 var rules = document.querySelector('#rules-section');
 var stats = document.querySelector('#stats-section');
+const totalGames = document.querySelector('#stats-total-games');
+const percentCorrect = document.querySelector('#stats-percent-correct');
+const guessAverage = document.querySelector('#stats-average-guesses');
+const playedYet = document.querySelector('.played-yet')
 var gameOverBox = document.querySelector('#game-over-section');
+var gameOverBoxLost = document.querySelector('#game-over-section-loss');
 var gameOverGuessCount = document.querySelector('#game-over-guesses-count');
 var gameOverGuessGrammar = document.querySelector('#game-over-guesses-plural');
 
-// Event Listeners
-window.addEventListener('load', setGame);
 
+// Event Listeners
+window.addEventListener('load', function () {
+  getData().then(response => {
+    words = response;
+    setGame();
+  })
+});
+
+console.log('outside', words)
 for (var i = 0; i < inputs.length; i++) {
   inputs[i].addEventListener('keyup', function() { moveToNextInput(event) });
 }
@@ -43,6 +56,7 @@ viewStatsButton.addEventListener('click', viewStats);
 function setGame() {
   currentRow = 1;
   winningWord = getRandomWord();
+  console.log('winning word', winningWord);
   updateInputPermissions();
 }
 
@@ -64,7 +78,7 @@ function updateInputPermissions() {
 }
 
 function moveToNextInput(e) {
-  var key = e.keyCode || e.charCode;
+  var key = e.keyCode || e.charCode; // keyCode is depreciated and not recommended, keydown
 
   if( key !== 8 && key !== 46 ) {
     var indexOfNext = parseInt(e.target.id.split('-')[2]) + 1;
@@ -82,16 +96,18 @@ function clickLetter(e) {
       activeIndex = i;
     }
   }
-
+  // console.log('clickletter', activeInput)
   activeInput.value = e.target.innerText;
+  // console.log('clickletter', inputs)
   inputs[activeIndex + 1].focus();
 }
+
 
 function submitGuess() {
   if (checkIsWord()) {
     errorMessage.innerText = '';
     compareGuess();
-    if (checkForWin()) {
+    if (checkForWin() || currentRow > 5) {
       setTimeout(declareWinner, 1000);
     } else {
       changeRow();
@@ -166,14 +182,18 @@ function changeRow() {
 }
 
 function declareWinner() {
+  letterKey.classList.add('hidden');
   recordGameStats();
-  changeGameOverText();
-  viewGameOverMessage();
+  // if(checkForWin()) {
+    changeGameOverText();
+  // }else {
+    viewGameOverMessage();
+  // }
   setTimeout(startNewGame, 4000);
 }
 
 function recordGameStats() {
-  gamesPlayed.push({ solved: true, guesses: currentRow });
+  gamesPlayed.push({ solved: checkForWin(), guesses: currentRow });
 }
 
 function changeGameOverText() {
@@ -223,7 +243,8 @@ function viewGame() {
   gameBoard.classList.remove('collapsed');
   rules.classList.add('collapsed');
   stats.classList.add('collapsed');
-  gameOverBox.classList.add('collapsed')
+  gameOverBox.classList.add('collapsed');
+  gameOverBoxLost.classList.add('collapsed');
   viewGameButton.classList.add('active');
   viewRulesButton.classList.remove('active');
   viewStatsButton.classList.remove('active');
@@ -237,10 +258,46 @@ function viewStats() {
   viewGameButton.classList.remove('active');
   viewRulesButton.classList.remove('active');
   viewStatsButton.classList.add('active');
+  const seeStats = calculateStats();
+  totalGames.innerText = `${gamesPlayed.length}`;
+  percentCorrect.innerText = `${seeStats.winPercent}`;
+  if(!gamesPlayed.length) {
+    playedYet.classList.add('collapsed');
+  } else {
+    playedYet.classList.remove('collapsed');
+    guessAverage.innerText = `${seeStats.guessAverage}`;
+  }
 }
 
 function viewGameOverMessage() {
-  gameOverBox.classList.remove('collapsed')
-  letterKey.classList.add('hidden');
   gameBoard.classList.add('collapsed');
+  if(checkForWin()) {
+    gameOverBox.classList.remove('collapsed');
+  } else {
+    gameOverBoxLost.classList.remove('collapsed');
+  }
+}
+
+const calculateStats = () => {
+  let numberOfWins = 0;
+  let totalRounds = 0;
+  gamesPlayed.forEach(game => {
+    if(game.solved) {
+      numberOfWins++;
+    }
+    totalRounds += game.guesses;
+  });
+  let guessAverage = Math.floor(totalRounds/gamesPlayed.length);
+  let percentageOfWins = Math.floor(numberOfWins/gamesPlayed.length * 100);
+
+  return {winPercent: percentageOfWins || 0, guessAverage: guessAverage || 0};
+
+}
+
+// =========== fetch api's =============
+
+const getData = () => {
+  return fetch('http://localhost:3001/api/v1/words')
+              .then(response => response.json())
+              .catch(err => console.log(err));
 }
